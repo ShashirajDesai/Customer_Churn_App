@@ -1,23 +1,21 @@
 import streamlit as st
 import pandas as pd
 import joblib
-import shap
 
 # Load trained pipeline
 pipeline = joblib.load("rf_churn_pipeline.pkl")
 
-# Load SHAP explainer for model
-explainer = shap.TreeExplainer(pipeline.named_steps['classifier'])
-
 st.title("🔍 Customer Churn Prediction App")
-st.write("Enter customer details below to predict churn probability and see key influencing factors.")
+st.write("Enter customer details to predict churn probability and get recommendations.")
 
 # Form for user input
 with st.form("churn_form"):
+    # Numerical inputs
     tenure = st.number_input("Tenure (months)", min_value=0, max_value=72, value=12)
     monthly_charges = st.number_input("Monthly Charges", min_value=0.0, max_value=200.0, value=70.0)
     total_charges = st.number_input("Total Charges", min_value=0.0, max_value=10000.0, value=840.0)
 
+    # Categorical inputs
     gender = st.selectbox("Gender", ["Male", "Female"])
     senior_citizen = st.selectbox("Senior Citizen", [0, 1])
     partner = st.selectbox("Partner", ["Yes", "No"])
@@ -39,8 +37,9 @@ with st.form("churn_form"):
 
     submitted = st.form_submit_button("Predict Churn")
 
+# On submit
 if submitted:
-    # Create single-row DataFrame
+    # Create input DataFrame
     input_data = pd.DataFrame({
         "gender": [gender],
         "SeniorCitizen": [senior_citizen],
@@ -63,40 +62,20 @@ if submitted:
         "TotalCharges": [total_charges]
     })
 
-    # Prediction
+    # Predictions
     prediction = pipeline.predict(input_data)[0]
     probability = pipeline.predict_proba(input_data)[0][1]
 
+    # Display results
     st.subheader("📊 Prediction Result")
     st.write(f"**Churn:** {'Yes' if prediction == 1 else 'No'}")
     st.write(f"**Churn Probability:** {probability:.2%}")
 
-    # Recommendation
+    # Recommendation logic
     st.subheader("💡 Recommendation")
-    if probability > 0.7:
-        st.warning("High churn risk! Consider offering discounts or upgrading customer support.")
-    elif probability > 0.4:
-        st.info("Moderate churn risk. Engage customer with loyalty rewards or personalized offers.")
+    if probability >= 0.7:
+        st.error("High churn risk — Offer immediate retention incentives like discounts or service upgrades.")
+    elif 0.4 <= probability < 0.7:
+        st.warning("Moderate churn risk — Engage with personalized offers and proactive support.")
     else:
-        st.success("Low churn risk. Maintain good service quality.")
-
-    # SHAP explanation
-    st.subheader("🔍 Top Factors Influencing Prediction")
-    
-    # Preprocess input for SHAP
-    X_processed = pipeline.named_steps['preprocessor'].transform(input_data)
-    
-    # Get SHAP values
-    shap_values = explainer.shap_values(X_processed)
-    
-    # Get feature names after encoding
-    feature_names = pipeline.named_steps['preprocessor'].get_feature_names_out()
-    
-    # Map feature importances for this prediction
-    feature_importance = pd.DataFrame({
-        "Feature": feature_names,
-        "SHAP Value": shap_values[1][0]  # Class 1 = Churn
-    })
-    feature_importance = feature_importance.reindex(feature_importance["SHAP Value"].abs().sort_values(ascending=False).index)
-    
-    st.table(feature_importance.head(3))
+        st.success("Low churn risk — Maintain customer satisfaction through consistent service quality.")
